@@ -60,7 +60,17 @@ class Renderer: NSObject, MTKViewDelegate {
             fatalError("Unable to create default Metal library")
         }
         
+        let vertexDescriptor = MTLVertexDescriptor()
+        vertexDescriptor.attributes[0].format = .float2
+        vertexDescriptor.attributes[0].offset = 0
+        vertexDescriptor.attributes[0].bufferIndex = 0
+        vertexDescriptor.attributes[1].format = .float4
+        vertexDescriptor.attributes[1].offset = MemoryLayout<Float>.stride * 2
+        vertexDescriptor.attributes[1].bufferIndex = 0
+        vertexDescriptor.layouts[0].stride = MemoryLayout<Float>.stride * 6
+        
         let renderPipelineDescriptor = MTLRenderPipelineDescriptor()
+        renderPipelineDescriptor.vertexDescriptor = vertexDescriptor
         renderPipelineDescriptor.vertexFunction = library.makeFunction(name: "vertex_main")!
         renderPipelineDescriptor.fragmentFunction = library.makeFunction(name: "fragment_main")!
         
@@ -74,11 +84,12 @@ class Renderer: NSObject, MTKViewDelegate {
     }
     
     private func makeResource() {
-        var positions = [
-            SIMD2<Float>(-0.8, 0.4),
-            SIMD2<Float>(0.4, -0.8),
-            SIMD2<Float>(0.8, 0.8)
+        var vertexData: [Float] = [
+        //    x     y       r    g    b    a
+            -0.8,  0.4,    1.0, 0.0, 1.0, 1.0,
+             0.4, -0.8,    0.0, 1.0, 1.0, 1.0,
+             0.8,  0.8,    1.0, 1.0, 0.0, 1.0,
         ]
-        vertexBuffer = device.makeBuffer(bytes: &positions, length: MemoryLayout<SIMD2<Float>>.stride * positions.count, options: .storageModeShared)
+        vertexBuffer = device.makeBuffer(bytes: &vertexData, length: MemoryLayout<Float>.stride * vertexData.count, options: .storageModeShared)
     }
 }
