@@ -31,12 +31,14 @@ class Renderer: NSObject, MTKViewDelegate {
     private let constantsStride: Int
     private var currentConstantBufferOffset: Int
     
+    private var time: TimeInterval = 0.0
+    
     init(device: MTLDevice, view: MTKView) {
         self.device = device
         self.commandQueue = device.makeCommandQueue()!
         self.view = view
         self.frameIndex = 0
-        self.constantsSize = MemoryLayout<SIMD2<Float>>.size
+        self.constantsSize = MemoryLayout<simd_float4x4>.size
         self.constantsStride = align(constantsSize, upTo: 256)
         self.currentConstantBufferOffset = 0
         
@@ -114,23 +116,42 @@ class Renderer: NSObject, MTKViewDelegate {
     private func makeResource() {
         var vertexData: [Float] = [
         //    x     y       r    g    b    a
-            -0.8,  0.4,    1.0, 0.0, 1.0, 1.0,
-             0.4, -0.8,    0.0, 1.0, 1.0, 1.0,
-             0.8,  0.8,    1.0, 1.0, 0.0, 1.0,
+            -100,  -20,    1.0, 0.0, 1.0, 1.0,
+             100, -60,    0.0, 1.0, 1.0, 1.0,
+             30,  100,    1.0, 1.0, 0.0, 1.0,
         ]
         vertexBuffer = device.makeBuffer(bytes: &vertexData, length: MemoryLayout<Float>.stride * vertexData.count, options: .storageModeShared)
         constantsBuffer = device.makeBuffer(length: constantsStride * MaxOutstandingFrameCount, options: .storageModeShared)
     }
     
     private func updateConstants() {
-        let time = CACurrentMediaTime()
-        let speedFactor = 3.0
-        let rotationAngle = Float(fmod(speedFactor * time, .pi * 2))
-        let rotationMagnitude: Float = 0.1
-        var positionOffset = SIMD2<Float>(cos(rotationAngle), sin(rotationAngle)) * rotationMagnitude
+        time += 1.0 / Double(view.preferredFramesPerSecond)
+        let t = Float(time)
+        
+        let pulseRate: Float = 1.5
+        let scaleFactor = 1.0 + 0.5 * cos(pulseRate * t)
+        let scale = SIMD2<Float>(scaleFactor, scaleFactor)
+        let scaleMatrix = simd_float4x4(scale2D: scale)
+        
+        let rotationRate: Float = 2.5
+        let rotationAngle = rotationRate * t
+        let rotationMatrix = simd_float4x4(rotateZ: rotationAngle)
+        
+        let orbitalRadius: Float = 200
+        let translation = orbitalRadius * SIMD2<Float>(cos(t), sin(t))
+        let translationMatrix = simd_float4x4(translateXY: translation)
+        
+        let modelMatrix = translationMatrix * rotationMatrix * scaleMatrix
+        
+        let aspectRatio = Float(view.drawableSize.width / view.drawableSize.height)
+        let canvasWidth: Float = 800
+        let canvasHeight = canvasWidth / aspectRatio
+        let projectionMatrix = simd_float4x4(orthographicProjectionWithLeft: -canvasWidth / 2, top: canvasHeight / 2, right: canvasWidth / 2, bottom: -canvasHeight / 2, near: 0.0, far: 1.0)
+        
+        var transformMatrix = projectionMatrix * modelMatrix
 
         currentConstantBufferOffset = (frameIndex % MaxOutstandingFrameCount) * constantsStride
         let constants = constantsBuffer.contents().advanced(by: currentConstantBufferOffset)
-        constants.copyMemory(from: &positionOffset, byteCount: constantsSize)
+        constants.copyMemory(from: &transformMatrix, byteCount: constantsSize)
     }
 }
