@@ -15,6 +15,8 @@
 		EC90C2092BCCCCC9003EA917 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = EC90C2072BCCCCC9003EA917 /* LaunchScreen.storyboard */; };
 		EC90C2142BCCCD81003EA917 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EC90C2112BCCCD81003EA917 /* Metal.framework */; };
 		EC90C2152BCCCD81003EA917 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EC90C2122BCCCD81003EA917 /* MetalKit.framework */; };
+		EC90C2182BCCD3C9003EA917 /* Demo.metal in Sources */ = {isa = PBXBuildFile; fileRef = EC90C2172BCCD3C9003EA917 /* Demo.metal */; };
+		EC90C21B2BCD810B003EA917 /* Renderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC90C21A2BCD810B003EA917 /* Renderer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -29,6 +31,8 @@
 		EC90C2112BCCCD81003EA917 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		EC90C2122BCCCD81003EA917 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
 		EC90C2132BCCCD81003EA917 /* MetalFX.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalFX.framework; path = System/Library/Frameworks/MetalFX.framework; sourceTree = SDKROOT; };
+		EC90C2172BCCD3C9003EA917 /* Demo.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Demo.metal; sourceTree = "<group>"; };
+		EC90C21A2BCD810B003EA917 /* Renderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Renderer.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -64,9 +68,11 @@
 		EC90C1FB2BCCCCC7003EA917 /* LearningMetalSwift */ = {
 			isa = PBXGroup;
 			children = (
+				EC90C2192BCCD65E003EA917 /* MetalLibs */,
 				EC90C1FC2BCCCCC7003EA917 /* AppDelegate.swift */,
 				EC90C1FE2BCCCCC7003EA917 /* SceneDelegate.swift */,
 				EC90C2002BCCCCC7003EA917 /* ViewController.swift */,
+				EC90C21A2BCD810B003EA917 /* Renderer.swift */,
 				EC90C2022BCCCCC7003EA917 /* Main.storyboard */,
 				EC90C2052BCCCCC9003EA917 /* Assets.xcassets */,
 				EC90C2072BCCCCC9003EA917 /* LaunchScreen.storyboard */,
@@ -83,6 +89,14 @@
 				EC90C2122BCCCD81003EA917 /* MetalKit.framework */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		EC90C2192BCCD65E003EA917 /* MetalLibs */ = {
+			isa = PBXGroup;
+			children = (
+				EC90C2172BCCD3C9003EA917 /* Demo.metal */,
+			);
+			path = MetalLibs;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -156,8 +170,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EC90C2182BCCD3C9003EA917 /* Demo.metal in Sources */,
 				EC90C2012BCCCCC7003EA917 /* ViewController.swift in Sources */,
 				EC90C1FD2BCCCCC7003EA917 /* AppDelegate.swift in Sources */,
+				EC90C21B2BCD810B003EA917 /* Renderer.swift in Sources */,
 				EC90C1FF2BCCCCC7003EA917 /* SceneDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
