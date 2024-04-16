@@ -18,9 +18,9 @@ struct VertexOut {
     float4 color;
 };
 
-vertex VertexOut vertex_main(VertexIn in [[stage_in]]) {
+vertex VertexOut vertex_main(VertexIn in [[stage_in]], constant float2& positionOffset[[buffer(1)]]) {
     VertexOut out;
-    out.position = float4(in.position, 0.0, 1.0);
+    out.position = float4(in.position + positionOffset, 0.0, 1.0);
     out.color = in.color;
     return out;
 }

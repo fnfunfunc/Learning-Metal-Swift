@@ -9,6 +9,12 @@ import Foundation
 import Metal
 import MetalKit
 
+fileprivate func align(_ value: Int, upTo alignment: Int) -> Int {
+    ((value + alignment - 1) / alignment) * alignment
+}
+
+fileprivate let MaxOutstandingFrameCount = 3
+
 class Renderer: NSObject, MTKViewDelegate {
     
     let device: MTLDevice
@@ -17,10 +23,22 @@ class Renderer: NSObject, MTKViewDelegate {
     private var renderPipelineState: MTLRenderPipelineState!
     private var vertexBuffer: MTLBuffer!
     
+    private var frameSemaphore = DispatchSemaphore(value: MaxOutstandingFrameCount)
+    private var frameIndex: Int
+    
+    private var constantsBuffer: MTLBuffer!
+    private let constantsSize: Int
+    private let constantsStride: Int
+    private var currentConstantBufferOffset: Int
+    
     init(device: MTLDevice, view: MTKView) {
         self.device = device
         self.commandQueue = device.makeCommandQueue()!
         self.view = view
+        self.frameIndex = 0
+        self.constantsSize = MemoryLayout<SIMD2<Float>>.size
+        self.constantsStride = align(constantsSize, upTo: 256)
+        self.currentConstantBufferOffset = 0
         
         super.init()
         
@@ -37,6 +55,9 @@ class Renderer: NSObject, MTKViewDelegate {
     }
     
     func draw(in view: MTKView) {
+        frameSemaphore.wait()
+        updateConstants()
+        
         guard let renderPassDescriptor = view.currentRenderPassDescriptor else {
             return
         }
@@ -48,11 +69,18 @@ class Renderer: NSObject, MTKViewDelegate {
         let renderCommandEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)
         renderCommandEncoder?.setRenderPipelineState(renderPipelineState)
         renderCommandEncoder?.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
+        renderCommandEncoder?.setVertexBuffer(constantsBuffer, offset: currentConstantBufferOffset, index: 1)
         renderCommandEncoder?.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
         renderCommandEncoder?.endEncoding()
         
         commandBuffer.present(view.currentDrawable!)
+        commandBuffer.addCompletedHandler { [weak self] _ in
+            self?.frameSemaphore.signal()
+        }
+        
         commandBuffer.commit()
+        
+        frameIndex += 1
     }
     
     private func makePipeline() {
@@ -91,5 +119,18 @@ class Renderer: NSObject, MTKViewDelegate {
              0.8,  0.8,    1.0, 1.0, 0.0, 1.0,
         ]
         vertexBuffer = device.makeBuffer(bytes: &vertexData, length: MemoryLayout<Float>.stride * vertexData.count, options: .storageModeShared)
+        constantsBuffer = device.makeBuffer(length: constantsStride * MaxOutstandingFrameCount, options: .storageModeShared)
+    }
+    
+    private func updateConstants() {
+        let time = CACurrentMediaTime()
+        let speedFactor = 3.0
+        let rotationAngle = Float(fmod(speedFactor * time, .pi * 2))
+        let rotationMagnitude: Float = 0.1
+        var positionOffset = SIMD2<Float>(cos(rotationAngle), sin(rotationAngle)) * rotationMagnitude
+
+        currentConstantBufferOffset = (frameIndex % MaxOutstandingFrameCount) * constantsStride
+        let constants = constantsBuffer.contents().advanced(by: currentConstantBufferOffset)
+        constants.copyMemory(from: &positionOffset, byteCount: constantsSize)
     }
 }
