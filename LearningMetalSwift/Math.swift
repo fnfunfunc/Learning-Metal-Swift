@@ -84,4 +84,16 @@ extension simd_float4x4 {
                   SIMD4<Float>(0, 0, sz, 0),
                   SIMD4<Float>(tx, ty, tz, 1))
     }
+    
+    init(perspectiveProjectionFoVY fovYRadians: Float, aspectRatio: Float, near: Float, far: Float) {
+        let sy = 1 / tan(fovYRadians * 0.5)
+        let sx = sy / aspectRatio
+        let zRange = far - near
+        let sz = -(far + near) / zRange
+        let tz = -2 * far * near / zRange
+        self.init(SIMD4<Float>(sx, 0, 0, 0),
+                  SIMD4<Float>(0, sy, 0, 0),
+                  SIMD4<Float>(0, 0, sz, -1),
+                  SIMD4<Float>(0, 0, tz, 0))
+    }
 }

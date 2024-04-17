@@ -1,5 +1,5 @@
 //
-//  Demo.metal
+//  Shader.metal
 //  LearningMetalSwift
 //
 //  Created by eternal on 2024/4/15.
