@@ -9,9 +9,6 @@ import Foundation
 import Metal
 import MetalKit
 
-fileprivate func align(_ value: Int, upTo alignment: Int) -> Int {
-    ((value + alignment - 1) / alignment) * alignment
-}
 
 fileprivate let MaxOutstandingFrameCount = 3
 
@@ -21,11 +18,9 @@ class Renderer: NSObject, MTKViewDelegate {
     let commandQueue: MTLCommandQueue
     let view: MTKView
     
-    let useIndexedMesh: Bool = true
-    let mesh: SimpleMesh
+    var mesh: MTKMesh!
     
     private var renderPipelineState: MTLRenderPipelineState!
-    private var vertexBuffer: MTLBuffer!
     
     private var frameSemaphore = DispatchSemaphore(value: MaxOutstandingFrameCount)
     private var frameIndex: Int
@@ -34,8 +29,6 @@ class Renderer: NSObject, MTKViewDelegate {
     private let constantsSize: Int
     private let constantsStride: Int
     private var currentConstantBufferOffset: Int
-    
-    private var time: TimeInterval = 0.0
     
     init(device: MTLDevice, view: MTKView) {
         self.device = device
@@ -46,19 +39,14 @@ class Renderer: NSObject, MTKViewDelegate {
         self.constantsStride = align(constantsSize, upTo: 256)
         self.currentConstantBufferOffset = 0
         
-        let color = SIMD4<Float>(0.0, 0.5, 0.8, 1.0)
-        mesh = useIndexedMesh ?
-            SimpleMesh(indexedPlanarPolygonSideCount: 11, radius: 250, color: color, device: device) :
-            SimpleMesh(planarPolygonSideCount: 11, radius: 250, color: color, device: device)
-        
         super.init()
         
         view.device = device
         view.delegate = self
         view.clearColor = MTLClearColor(red: 0.95, green: 0.95, blue: 0.95, alpha: 1.0)
         
-        makePipeline()
         makeResource()
+        makePipeline()
     }
     
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
@@ -79,15 +67,18 @@ class Renderer: NSObject, MTKViewDelegate {
         
         let renderCommandEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)
         renderCommandEncoder?.setRenderPipelineState(renderPipelineState)
-        for (i, vertexBuffer) in mesh.vertexBuffers.enumerated() {
-            renderCommandEncoder?.setVertexBuffer(vertexBuffer, offset: 0, index: i)
-        }
+        renderCommandEncoder?.setFrontFacing(.counterClockwise)
+        renderCommandEncoder?.setCullMode(.back)
         renderCommandEncoder?.setVertexBuffer(constantsBuffer, offset: currentConstantBufferOffset, index: 2)
-        if let indexBuffer = mesh.indexBuffer {
-            renderCommandEncoder?.drawIndexedPrimitives(type: mesh.primitiveType, indexCount: mesh.indexCount, indexType: mesh.indexType, indexBuffer: indexBuffer, indexBufferOffset: 0)
-        } else {
-            renderCommandEncoder?.drawPrimitives(type: mesh.primitiveType, vertexStart: 0, vertexCount: mesh.vertexCount)
+        for (i, meshBuffer) in mesh.vertexBuffers.enumerated() {
+            renderCommandEncoder?.setVertexBuffer(meshBuffer.buffer, offset: meshBuffer.offset, index: i)
         }
+        
+        for submesh in mesh.submeshes {
+            let indexBuffer = submesh.indexBuffer
+            renderCommandEncoder?.drawIndexedPrimitives(type: submesh.primitiveType, indexCount: submesh.indexCount, indexType: submesh.indexType, indexBuffer: indexBuffer.buffer, indexBufferOffset: indexBuffer.offset)
+        }
+        
         renderCommandEncoder?.endEncoding()
         
         commandBuffer.present(view.currentDrawable!)
@@ -107,7 +98,9 @@ class Renderer: NSObject, MTKViewDelegate {
         
         
         let renderPipelineDescriptor = MTLRenderPipelineDescriptor()
-        renderPipelineDescriptor.vertexDescriptor = mesh.vertexDescritor
+        let vertexDescriptor = MTKMetalVertexDescriptorFromModelIO(mesh.vertexDescriptor)!
+        renderPipelineDescriptor.vertexDescriptor = vertexDescriptor
+        
         renderPipelineDescriptor.vertexFunction = library.makeFunction(name: "vertex_main")!
         renderPipelineDescriptor.fragmentFunction = library.makeFunction(name: "fragment_main")!
         
@@ -121,40 +114,34 @@ class Renderer: NSObject, MTKViewDelegate {
     }
     
     private func makeResource() {
-        var vertexData: [Float] = [
-        //    x     y       r    g    b    a
-            -100,  -20,    1.0, 0.0, 1.0, 1.0,
-             100, -60,    0.0, 1.0, 1.0, 1.0,
-             30,  100,    1.0, 1.0, 0.0, 1.0,
-        ]
-        vertexBuffer = device.makeBuffer(bytes: &vertexData, length: MemoryLayout<Float>.stride * vertexData.count, options: .storageModeShared)
+        let allocator = MTKMeshBufferAllocator(device: device)
+        let mdlMesh = MDLMesh(sphereWithExtent: SIMD3<Float>(1, 1, 1), segments: SIMD2<UInt32>(24, 24), inwardNormals: false, geometryType: .triangles, allocator: allocator)
+        
+        let vertexDescriptor = MDLVertexDescriptor()
+        vertexDescriptor.vertexAttributes[0].name = MDLVertexAttributePosition
+        vertexDescriptor.vertexAttributes[0].format = .float3
+        vertexDescriptor.vertexAttributes[0].offset = 0
+        vertexDescriptor.vertexAttributes[0].bufferIndex = 0
+        vertexDescriptor.vertexAttributes[1].name = MDLVertexAttributeNormal
+        vertexDescriptor.vertexAttributes[1].format = .float3
+        vertexDescriptor.vertexAttributes[1].offset = MemoryLayout<SIMD3<Float>>.stride
+        vertexDescriptor.vertexAttributes[1].bufferIndex = 0
+        vertexDescriptor.bufferLayouts[0].stride = MemoryLayout<SIMD3<Float>>.stride * 2
+        mdlMesh.vertexDescriptor = vertexDescriptor
+        
+        mesh = try! MTKMesh(mesh: mdlMesh, device: device)
+        
         constantsBuffer = device.makeBuffer(length: constantsStride * MaxOutstandingFrameCount, options: .storageModeShared)
+        constantsBuffer.label = "Dynamic Constant Buffer"
     }
     
     private func updateConstants() {
-//        time += 1.0 / Double(view.preferredFramesPerSecond)
-        let t = Float(time)
-        
-//        let pulseRate: Float = 1.5
-//        let scaleFactor = 1.0 + 0.5 * cos(pulseRate * t)
-//        let scale = SIMD2<Float>(scaleFactor, scaleFactor)
-//        let scaleMatrix = simd_float4x4(scale2D: scale)
-        
-        let rotationRate: Float = 2.5
-        let rotationAngle = rotationRate * t
-        let rotationMatrix = simd_float4x4(rotateZ: rotationAngle)
-        
-//        let orbitalRadius: Float = 200
-//        let translation = orbitalRadius * SIMD2<Float>(cos(t), sin(t))
-//        let translationMatrix = simd_float4x4(translateXY: translation)
-        
-//        let modelMatrix = translationMatrix * rotationMatrix * scaleMatrix
-        let modelMatrix = rotationMatrix
+        let modelMatrix = matrix_identity_float4x4
         
         let aspectRatio = Float(view.drawableSize.width / view.drawableSize.height)
-        let canvasWidth: Float = 800
+        let canvasWidth: Float = 5
         let canvasHeight = canvasWidth / aspectRatio
-        let projectionMatrix = simd_float4x4(orthographicProjectionWithLeft: -canvasWidth / 2, top: canvasHeight / 2, right: canvasWidth / 2, bottom: -canvasHeight / 2, near: 0.0, far: 1.0)
+        let projectionMatrix = simd_float4x4(orthographicProjectionWithLeft: -canvasWidth / 2, top: canvasHeight / 2, right: canvasWidth / 2, bottom: -canvasHeight / 2, near: -1.0, far: 1.0)
         
         var transformMatrix = projectionMatrix * modelMatrix
 

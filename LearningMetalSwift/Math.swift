@@ -7,6 +7,11 @@
 
 import simd
 
+func align(_ value: Int, upTo alignment: Int) -> Int {
+    ((value + alignment - 1) / alignment) * alignment
+}
+
+
 extension simd_float4x4 {
     init(scale2D s: SIMD2<Float>) {
         self.init(SIMD4<Float>(s.x, 0, 0, 0),

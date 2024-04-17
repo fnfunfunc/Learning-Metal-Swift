@@ -19,6 +19,7 @@
 		EC90C21B2BCD810B003EA917 /* Renderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC90C21A2BCD810B003EA917 /* Renderer.swift */; };
 		EC90C21D2BCE6C06003EA917 /* Math.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC90C21C2BCE6C06003EA917 /* Math.swift */; };
 		EC90C21F2BCE9A49003EA917 /* SimpleMesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC90C21E2BCE9A49003EA917 /* SimpleMesh.swift */; };
+		EC90C2212BCEC89D003EA917 /* MeshUtilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC90C2202BCEC89D003EA917 /* MeshUtilities.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,6 +38,7 @@
 		EC90C21A2BCD810B003EA917 /* Renderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Renderer.swift; sourceTree = "<group>"; };
 		EC90C21C2BCE6C06003EA917 /* Math.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Math.swift; sourceTree = "<group>"; };
 		EC90C21E2BCE9A49003EA917 /* SimpleMesh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleMesh.swift; sourceTree = "<group>"; };
+		EC90C2202BCEC89D003EA917 /* MeshUtilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshUtilities.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -75,6 +77,7 @@
 				EC90C2192BCCD65E003EA917 /* MetalLibs */,
 				EC90C1FC2BCCCCC7003EA917 /* AppDelegate.swift */,
 				EC90C21C2BCE6C06003EA917 /* Math.swift */,
+				EC90C2202BCEC89D003EA917 /* MeshUtilities.swift */,
 				EC90C21A2BCD810B003EA917 /* Renderer.swift */,
 				EC90C1FE2BCCCCC7003EA917 /* SceneDelegate.swift */,
 				EC90C21E2BCE9A49003EA917 /* SimpleMesh.swift */,
@@ -183,6 +186,7 @@
 				EC90C21B2BCD810B003EA917 /* Renderer.swift in Sources */,
 				EC90C1FF2BCCCCC7003EA917 /* SceneDelegate.swift in Sources */,
 				EC90C21D2BCE6C06003EA917 /* Math.swift in Sources */,
+				EC90C2212BCEC89D003EA917 /* MeshUtilities.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
