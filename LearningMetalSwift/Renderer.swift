@@ -21,9 +21,11 @@ class Renderer: NSObject, MTKViewDelegate {
     var mesh: MTKMesh!
     
     private var renderPipelineState: MTLRenderPipelineState!
+    private var depthStencilState: MTLDepthStencilState!
     
     private var frameSemaphore = DispatchSemaphore(value: MaxOutstandingFrameCount)
     private var frameIndex: Int
+    private var time: TimeInterval = 0
     
     private var constantsBuffer: MTLBuffer!
     private let constantsSize: Int
@@ -111,6 +113,11 @@ class Renderer: NSObject, MTKViewDelegate {
         } catch {
             fatalError("Error while creating render pipeline state: \(error)")
         }
+        
+        let depthStencilDescriptor = MTLDepthStencilDescriptor()
+        depthStencilDescriptor.depthCompareFunction = .less
+        depthStencilDescriptor.isDepthWriteEnabled = true
+        depthStencilState = device.makeDepthStencilState(descriptor: depthStencilDescriptor)
     }
     
     private func makeResource() {
@@ -136,7 +143,9 @@ class Renderer: NSObject, MTKViewDelegate {
     }
     
     private func updateConstants() {
-        let modelMatrix = matrix_identity_float4x4
+        time += (1.0 / Double(view.preferredFramesPerSecond))
+        let t = Float(time)
+        let modelMatrix = simd_float4x4(rotateAbout: SIMD3<Float>(0, 1, 0), byAngle: t)
         
         let aspectRatio = Float(view.drawableSize.width / view.drawableSize.height)
         let canvasWidth: Float = 5
