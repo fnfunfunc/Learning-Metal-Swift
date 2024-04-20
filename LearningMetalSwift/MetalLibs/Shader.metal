@@ -16,17 +16,22 @@ struct VertexIn {
 struct VertexOut {
     float4 position [[position]];
     float3 normal;
+    float4 color;
 };
 
-vertex VertexOut vertex_main(VertexIn in [[stage_in]], constant float4x4& transform[[buffer(2)]]) {
+struct NodeConstants {
+    float4x4 modelViewProjectionMatrix;
+    float4 color;
+};
+
+vertex VertexOut vertex_main(VertexIn in [[stage_in]], constant NodeConstants& constants[[buffer(2)]]) {
     VertexOut out;
-    out.position = transform * float4(in.position, 1.0);
+    out.position = constants.modelViewProjectionMatrix * float4(in.position, 1.0);
     out.normal = in.normal;
+    out.color = constants.color;
     return out;
 }
 
 fragment float4 fragment_main(VertexOut in [[stage_in]]) {
-    float3 N = normalize(in.normal);
-    float3 color = N * float3(0.5) + float3(0.5);
-    return float4(color, 1);
+    return in.color;
 }

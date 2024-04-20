@@ -20,6 +20,9 @@ class Renderer: NSObject, MTKViewDelegate {
     let view: MTKView
     
     var vertexDescriptor: MTLVertexDescriptor!
+    var sunNode: Node!
+    var planetNode: Node!
+    var moonNode: Node!
     var nodes = [Node]()
     
     private var renderPipelineState: MTLRenderPipelineState!
@@ -38,13 +41,15 @@ class Renderer: NSObject, MTKViewDelegate {
         self.commandQueue = device.makeCommandQueue()!
         self.view = view
         self.frameIndex = 0
-        self.constantsSize = MemoryLayout<simd_float4x4>.size
+        self.constantsSize = MemoryLayout<NodeConstants>.size
         self.constantsStride = align(constantsSize, upTo: 256)
         
         super.init()
         
         view.device = device
         view.delegate = self
+        view.colorPixelFormat = .bgra8Unorm
+        view.depthStencilPixelFormat = .depth32Float
         view.clearColor = MTLClearColor(red: 0.95, green: 0.95, blue: 0.95, alpha: 1.0)
         
         makeResource()
@@ -69,11 +74,14 @@ class Renderer: NSObject, MTKViewDelegate {
         
         let renderCommandEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)
         renderCommandEncoder?.setRenderPipelineState(renderPipelineState)
+        renderCommandEncoder?.setDepthStencilState(depthStencilState)
         renderCommandEncoder?.setFrontFacing(.counterClockwise)
         renderCommandEncoder?.setCullMode(.back)
         
         for (objectIndex, node) in nodes.enumerated() {
-            let mesh = node.mesh
+            guard let mesh = node.mesh else {
+                continue
+            }
             
             renderCommandEncoder?.setVertexBuffer(constantsBuffer, offset: constantBufferOffset(objectIndex: objectIndex, frameIndex: frameIndex), index: 2)
             for (i, meshBuffer) in mesh.vertexBuffers.enumerated() {
@@ -112,6 +120,7 @@ class Renderer: NSObject, MTKViewDelegate {
         renderPipelineDescriptor.fragmentFunction = library.makeFunction(name: "fragment_main")!
         
         renderPipelineDescriptor.colorAttachments[0].pixelFormat = view.colorPixelFormat
+        renderPipelineDescriptor.depthAttachmentPixelFormat = view.depthStencilPixelFormat
         
         do {
             renderPipelineState = try device.makeRenderPipelineState(descriptor: renderPipelineDescriptor)
@@ -144,12 +153,19 @@ class Renderer: NSObject, MTKViewDelegate {
         
         let sphereMesh = try! MTKMesh(mesh: mdlSphere, device: device)
         
-        let mdlCube = MDLMesh(boxWithExtent: SIMD3<Float>(1.3, 1.3, 1.3), segments: SIMD3<UInt32>(1, 1, 1), inwardNormals: false, geometryType: .triangles, allocator: allocator)
-        mdlCube.vertexDescriptor = mdlVertexDescriptor
+        sunNode = Node(mesh: sphereMesh)
+        sunNode.color = SIMD4<Float>(1, 1, 0, 1)
+
+        planetNode = Node(mesh: sphereMesh)
+        planetNode.color = SIMD4<Float>(0, 0.4, 0.9, 1)
         
-        let cubeMesh = try! MTKMesh(mesh: mdlCube, device: device)
+        moonNode = Node(mesh: sphereMesh)
+        moonNode.color = SIMD4<Float>(0.7, 0.7, 0.7, 1)
         
-        nodes.append(contentsOf: [Node(mesh: sphereMesh), Node(mesh: cubeMesh)])
+        sunNode.addChildNode(planetNode)
+        planetNode.addChildNode(moonNode)
+
+        nodes = [sunNode, planetNode, moonNode]
         
         vertexDescriptor = MTKMetalVertexDescriptorFromModelIO(mdlVertexDescriptor)!
         
@@ -167,18 +183,25 @@ class Renderer: NSObject, MTKViewDelegate {
         let aspectRatio = Float(view.drawableSize.width / view.drawableSize.height)
         let projectionMatrix = simd_float4x4(perspectiveProjectionFoVY: .pi / 3, aspectRatio: aspectRatio, near: 0.01, far: 100)
         
-        let rotationAxis = normalize(SIMD3<Float>(0.3, 0.7, 0.2))
-        let rotationMatrix = simd_float4x4(rotateAbout: rotationAxis, byAngle: t)
+        let yAxis = SIMD3<Float>(0, 1, 0)
+        let planetRadius: Float = 0.3
+        let planetOrbitalRadius: Float = 2
+        planetNode.transform = simd_float4x4(rotateAbout: yAxis, byAngle: t) *
+                               simd_float4x4(translate: SIMD3<Float>(planetOrbitalRadius, 0, 0)) *
+                               simd_float4x4(scale: SIMD3<Float>(repeating: planetRadius))
         
-        nodes[0].modelMatrix = simd_float4x4(translate: SIMD3<Float>(0, 1.5, 0)) * rotationMatrix
-        nodes[1].modelMatrix = simd_float4x4(translate: SIMD3<Float>(0, -1.5, 0)) * rotationMatrix
+        let moonOrbitalRadius: Float = 2
+        let moonRadius: Float = 0.15
+        moonNode.transform = simd_float4x4(rotateAbout: yAxis, byAngle: 2 * t) *
+                             simd_float4x4(translate: SIMD3<Float>(moonOrbitalRadius, 0, 0)) *
+                             simd_float4x4(scale: SIMD3<Float>(repeating: moonRadius))
         
         for (objectIndex, node) in nodes.enumerated() {
-            var transformMatrix = projectionMatrix * viewMatrix * node.modelMatrix
-            
+            let transformMatrix = projectionMatrix * viewMatrix * node.worldTransform
+            var constants = NodeConstants(modelViewProjectionMatrix: transformMatrix, color: node.color)
             let offset = constantBufferOffset(objectIndex: objectIndex, frameIndex: frameIndex)
-            let constants = constantsBuffer.contents().advanced(by: offset)
-            constants.copyMemory(from: &transformMatrix, byteCount: constantsSize)
+            let constantsPointer = constantsBuffer.contents().advanced(by: offset)
+            constantsPointer.copyMemory(from: &constants, byteCount: constantsSize)
         }
     }
     
