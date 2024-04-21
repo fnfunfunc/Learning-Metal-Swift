@@ -20,13 +20,13 @@ class Renderer: NSObject, MTKViewDelegate {
     let view: MTKView
     
     var vertexDescriptor: MTLVertexDescriptor!
-    var sunNode: Node!
-    var planetNode: Node!
-    var moonNode: Node!
+    var boxNode: Node!
+    var sphereNode: Node!
     var nodes = [Node]()
     
     private var renderPipelineState: MTLRenderPipelineState!
     private var depthStencilState: MTLDepthStencilState!
+    private var samplerState: MTLSamplerState!
     
     private var frameSemaphore = DispatchSemaphore(value: MaxOutstandingFrameCount)
     private var frameIndex: Int
@@ -88,6 +88,9 @@ class Renderer: NSObject, MTKViewDelegate {
                 renderCommandEncoder?.setVertexBuffer(meshBuffer.buffer, offset: meshBuffer.offset, index: i)
             }
             
+            renderCommandEncoder?.setFragmentTexture(node.texture, index: 0)
+            renderCommandEncoder?.setFragmentSamplerState(samplerState, index: 0)
+            
             for submesh in mesh.submeshes {
                 let indexBuffer = submesh.indexBuffer
                 renderCommandEncoder?.drawIndexedPrimitives(type: submesh.primitiveType, indexCount: submesh.indexCount, indexType: submesh.indexType, indexBuffer: indexBuffer.buffer, indexBufferOffset: indexBuffer.offset)
@@ -132,40 +135,65 @@ class Renderer: NSObject, MTKViewDelegate {
         depthStencilDescriptor.depthCompareFunction = .less
         depthStencilDescriptor.isDepthWriteEnabled = true
         depthStencilState = device.makeDepthStencilState(descriptor: depthStencilDescriptor)
+        
+        let samplerDescritor = MTLSamplerDescriptor()
+        samplerDescritor.normalizedCoordinates = true
+        samplerDescritor.magFilter = .linear
+        samplerDescritor.minFilter = .linear
+        samplerDescritor.mipFilter = .nearest
+        samplerDescritor.sAddressMode = .repeat
+        samplerDescritor.tAddressMode = .repeat
+        samplerState = device.makeSamplerState(descriptor: samplerDescritor)!
     }
     
     private func makeResource() {
+        let textureLoader = MTKTextureLoader(device: device)
+        let options: [MTKTextureLoader.Option : Any] = [
+            .textureUsage : MTLTextureUsage.shaderRead.rawValue,
+            .textureStorageMode : MTLStorageMode.private.rawValue
+        ]
+        let texture = try? textureLoader.newTexture(name: "uv_grid", scaleFactor: 1.0, bundle: nil, options: options)
+        
         let allocator = MTKMeshBufferAllocator(device: device)
         
         let mdlVertexDescriptor = MDLVertexDescriptor()
-        mdlVertexDescriptor.vertexAttributes[0].name = MDLVertexAttributePosition
-        mdlVertexDescriptor.vertexAttributes[0].format = .float3
-        mdlVertexDescriptor.vertexAttributes[0].offset = 0
-        mdlVertexDescriptor.vertexAttributes[0].bufferIndex = 0
-        mdlVertexDescriptor.vertexAttributes[1].name = MDLVertexAttributeNormal
-        mdlVertexDescriptor.vertexAttributes[1].format = .float3
-        mdlVertexDescriptor.vertexAttributes[1].offset = MemoryLayout<SIMD3<Float>>.stride
-        mdlVertexDescriptor.vertexAttributes[1].bufferIndex = 0
-        mdlVertexDescriptor.bufferLayouts[0].stride = MemoryLayout<SIMD3<Float>>.stride * 2
+        let positionAttribute = mdlVertexDescriptor.vertexAttributes[0]
+        let normalAttribute = mdlVertexDescriptor.vertexAttributes[1]
+        let textureCoordAttribute = mdlVertexDescriptor.vertexAttributes[2]
+        // position attribute
+        positionAttribute.name = MDLVertexAttributePosition
+        positionAttribute.format = .float3
+        positionAttribute.offset = 0
+        positionAttribute.bufferIndex = 0
+        // normal attribute
+        normalAttribute.name = MDLVertexAttributeNormal
+        normalAttribute.format = .float3
+        normalAttribute.offset = MemoryLayout<SIMD3<Float>>.stride
+        normalAttribute.bufferIndex = 0
+        // texture attribute
+        textureCoordAttribute.name = MDLVertexAttributeTextureCoordinate
+        textureCoordAttribute.format = .float2
+        textureCoordAttribute.offset = 2 * MemoryLayout<SIMD3<Float>>.stride
+        textureCoordAttribute.bufferIndex = 0
         
-        let mdlSphere = MDLMesh(sphereWithExtent: SIMD3<Float>(1, 1, 1), segments: SIMD2<UInt32>(24, 24), inwardNormals: false, geometryType: .triangles, allocator: allocator)
+        mdlVertexDescriptor.bufferLayouts[0].stride = MemoryLayout<SIMD3<Float>>.stride * 2 + MemoryLayout<SIMD2<Float>>.stride
+        
+        let mdlBox = MDLMesh(boxWithExtent: SIMD3<Float>(repeating: 1.4), segments: SIMD3<UInt32>(repeating: 1), inwardNormals: false, geometryType: .triangles, allocator: allocator)
+        mdlBox.vertexDescriptor = mdlVertexDescriptor
+        
+        let boxMesh = try! MTKMesh(mesh: mdlBox, device: device)
+         
+        let mdlSphere = MDLMesh(sphereWithExtent: SIMD3<Float>(repeating: 1), segments: SIMD2<UInt32>(repeating: 24), inwardNormals: true, geometryType: .triangles, allocator: allocator)
         mdlSphere.vertexDescriptor = mdlVertexDescriptor
         
         let sphereMesh = try! MTKMesh(mesh: mdlSphere, device: device)
         
-        sunNode = Node(mesh: sphereMesh)
-        sunNode.color = SIMD4<Float>(1, 1, 0, 1)
-
-        planetNode = Node(mesh: sphereMesh)
-        planetNode.color = SIMD4<Float>(0, 0.4, 0.9, 1)
+        boxNode = Node(mesh: boxMesh)
+        boxNode.texture = texture
+        sphereNode = Node(mesh: sphereMesh)
+        sphereNode.texture = texture
         
-        moonNode = Node(mesh: sphereMesh)
-        moonNode.color = SIMD4<Float>(0.7, 0.7, 0.7, 1)
-        
-        sunNode.addChildNode(planetNode)
-        planetNode.addChildNode(moonNode)
-
-        nodes = [sunNode, planetNode, moonNode]
+        nodes = [boxNode, sphereNode]
         
         vertexDescriptor = MTKMetalVertexDescriptorFromModelIO(mdlVertexDescriptor)!
         
@@ -183,22 +211,15 @@ class Renderer: NSObject, MTKViewDelegate {
         let aspectRatio = Float(view.drawableSize.width / view.drawableSize.height)
         let projectionMatrix = simd_float4x4(perspectiveProjectionFoVY: .pi / 3, aspectRatio: aspectRatio, near: 0.01, far: 100)
         
-        let yAxis = SIMD3<Float>(0, 1, 0)
-        let planetRadius: Float = 0.3
-        let planetOrbitalRadius: Float = 2
-        planetNode.transform = simd_float4x4(rotateAbout: yAxis, byAngle: t) *
-                               simd_float4x4(translate: SIMD3<Float>(planetOrbitalRadius, 0, 0)) *
-                               simd_float4x4(scale: SIMD3<Float>(repeating: planetRadius))
+        let rotationAxis = normalize(SIMD3<Float>(0.3, 0.7, 0.1))
+        let rotationMatrix = simd_float4x4(rotateAbout: rotationAxis, byAngle: t)
         
-        let moonOrbitalRadius: Float = 2
-        let moonRadius: Float = 0.15
-        moonNode.transform = simd_float4x4(rotateAbout: yAxis, byAngle: 2 * t) *
-                             simd_float4x4(translate: SIMD3<Float>(moonOrbitalRadius, 0, 0)) *
-                             simd_float4x4(scale: SIMD3<Float>(repeating: moonRadius))
+        boxNode.transform = simd_float4x4(translate: SIMD3<Float>(0, -1.5, 0)) * rotationMatrix
+        sphereNode.transform = simd_float4x4(translate: SIMD3<Float>(0, 1.5, 0)) * rotationMatrix
         
         for (objectIndex, node) in nodes.enumerated() {
             let transformMatrix = projectionMatrix * viewMatrix * node.worldTransform
-            var constants = NodeConstants(modelViewProjectionMatrix: transformMatrix, color: node.color)
+            var constants = NodeConstants(modelViewProjectionMatrix: transformMatrix)
             let offset = constantBufferOffset(objectIndex: objectIndex, frameIndex: frameIndex)
             let constantsPointer = constantsBuffer.contents().advanced(by: offset)
             constantsPointer.copyMemory(from: &constants, byteCount: constantsSize)
