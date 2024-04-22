@@ -21,6 +21,7 @@ class Renderer: NSObject, MTKViewDelegate {
     
     var vertexDescriptor: MTLVertexDescriptor!
     var cowNode: Node!
+    var floorNode: Node!
     var nodes = [Node]()
     
     var lights = [Light]()
@@ -49,9 +50,9 @@ class Renderer: NSObject, MTKViewDelegate {
         
         view.device = device
         view.delegate = self
-        view.colorPixelFormat = .bgra8Unorm
+        view.colorPixelFormat = .bgra8Unorm_srgb
         view.depthStencilPixelFormat = .depth32Float
-        view.clearColor = MTLClearColor(red: 0.95, green: 0.95, blue: 0.95, alpha: 1.0)
+        view.clearColor = MTLClearColor(red: 0.0, green: 0.5, blue: 0.95, alpha: 1.0)
         
         makeScene()
         makeResource()
@@ -131,13 +132,13 @@ class Renderer: NSObject, MTKViewDelegate {
         positionAttribute.bufferIndex = 0
         normalAttribute.name = MDLVertexAttributeNormal
         normalAttribute.format = .float3
-        normalAttribute.offset = MemoryLayout<SIMD3<Float>>.stride
+        normalAttribute.offset = 12
         normalAttribute.bufferIndex = 0
         textureCoordAttribute.name = MDLVertexAttributeTextureCoordinate
         textureCoordAttribute.format = .float2
-        textureCoordAttribute.offset = 2 * MemoryLayout<SIMD3<Float>>.stride
+        textureCoordAttribute.offset = 24
         textureCoordAttribute.bufferIndex = 0
-        mdlVertexDescriptor.bufferLayouts[0].stride = 2 * MemoryLayout<SIMD3<Float>>.stride + MemoryLayout<SIMD2<Float>>.stride
+        mdlVertexDescriptor.bufferLayouts[0].stride = 32
         
         vertexDescriptor = MTKMetalVertexDescriptorFromModelIO(mdlVertexDescriptor)
         
@@ -172,7 +173,17 @@ class Renderer: NSObject, MTKViewDelegate {
         cowNode = Node(mesh: mesh)
         cowNode.texture = texture
         
-        nodes = [cowNode]
+        if let floorTextureURL = Bundle.main.url(forResource: "grass", withExtension: "png") {
+            texture = try? textureLoader.newTexture(URL: floorTextureURL, options: options)
+        }
+        
+        let mdlPlane = MDLMesh(planeWithExtent: SIMD3<Float>(4, 0, 4), segments: SIMD2<UInt32>(1, 1), geometryType: .triangles, allocator: allocator)
+        let mtkPlane = try! MTKMesh(mesh: mdlPlane, device: device)
+        
+        floorNode = Node(mesh: mtkPlane)
+        floorNode.texture = texture
+        
+        nodes = [floorNode, cowNode]
         
         let ambientLight = Light()
         ambientLight.type = .ambient
@@ -216,7 +227,7 @@ class Renderer: NSObject, MTKViewDelegate {
         samplerDescritor.normalizedCoordinates = true
         samplerDescritor.magFilter = .linear
         samplerDescritor.minFilter = .linear
-        samplerDescritor.mipFilter = .nearest
+        samplerDescritor.mipFilter = .linear
         samplerDescritor.sAddressMode = .repeat
         samplerDescritor.tAddressMode = .repeat
         samplerState = device.makeSamplerState(descriptor: samplerDescritor)!
@@ -238,7 +249,7 @@ class Renderer: NSObject, MTKViewDelegate {
         
         for (lightIndex, light) in lights.enumerated() {
             lightsBufferPointer[lightIndex] =
-            LightConstants(intensity: light.color * light.intensity, direction: light.direction, type: light.type.rawValue)
+                LightConstants(intensity: light.color * light.intensity, direction: light.direction, type: light.type.rawValue)
             
         }
     }
@@ -273,7 +284,7 @@ class Renderer: NSObject, MTKViewDelegate {
         nodeConstantsOffsets.removeAll()
         for node in nodes {
             let transform = viewMatrix * node.worldTransform
-            var constants = NodeConstants(modelViewProjectionMatrix: transform)
+            var constants = NodeConstants(modelViewMatrix: transform)
             
             let layout = MemoryLayout<NodeConstants>.self
             let offset = allocateConstantStorage(size: layout.size, alignment: layout.stride)

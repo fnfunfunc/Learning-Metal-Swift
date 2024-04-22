@@ -26,6 +26,7 @@
 		ECC4E5762BD5342A00D59495 /* spot_triangulated.obj in Resources */ = {isa = PBXBuildFile; fileRef = ECC4E5702BD5342A00D59495 /* spot_triangulated.obj */; };
 		ECC4E5792BD601A300D59495 /* spot_material.mtl in Resources */ = {isa = PBXBuildFile; fileRef = ECC4E5782BD601A300D59495 /* spot_material.mtl */; };
 		ECC4E57B2BD60CE800D59495 /* Light.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECC4E57A2BD60CE800D59495 /* Light.swift */; };
+		ECC4E57D2BD68DE300D59495 /* grass.png in Resources */ = {isa = PBXBuildFile; fileRef = ECC4E57C2BD68DE300D59495 /* grass.png */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -51,6 +52,7 @@
 		ECC4E5702BD5342A00D59495 /* spot_triangulated.obj */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = spot_triangulated.obj; sourceTree = "<group>"; };
 		ECC4E5782BD601A300D59495 /* spot_material.mtl */ = {isa = PBXFileReference; lastKnownFileType = text; path = spot_material.mtl; sourceTree = "<group>"; };
 		ECC4E57A2BD60CE800D59495 /* Light.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Light.swift; sourceTree = "<group>"; };
+		ECC4E57C2BD68DE300D59495 /* grass.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = grass.png; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -128,6 +130,7 @@
 			isa = PBXGroup;
 			children = (
 				ECC4E56B2BD5342A00D59495 /* spot */,
+				ECC4E57C2BD68DE300D59495 /* grass.png */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -200,6 +203,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				ECC4E57D2BD68DE300D59495 /* grass.png in Resources */,
 				EC90C2092BCCCCC9003EA917 /* LaunchScreen.storyboard in Resources */,
 				ECC4E5722BD5342A00D59495 /* spot_texture.png in Resources */,
 				ECC4E5792BD601A300D59495 /* spot_material.mtl in Resources */,

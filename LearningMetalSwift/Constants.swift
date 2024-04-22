@@ -15,7 +15,7 @@ struct LightConstants {
 }
 
 struct NodeConstants {
-    var modelViewProjectionMatrix: simd_float4x4
+    var modelViewMatrix: simd_float4x4
 }
 
 struct FrameConstants {
