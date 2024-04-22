@@ -11,6 +11,24 @@ func align(_ value: Int, upTo alignment: Int) -> Int {
     ((value + alignment - 1) / alignment) * alignment
 }
 
+func gcd(_ m: Int, _ n: Int) -> Int {
+    var a = 0
+    var b = max(m, n)
+    var r = min(m, n)
+    
+    while r != 0 {
+        a = b
+        b = r
+        r = a % b
+    }
+    
+    return b
+}
+
+func lcm(_ m: Int, _ n: Int) -> Int {
+    return m * n / gcd(m, n)
+}
+
 extension simd_float4x4 {
     init(scale2D s: SIMD2<Float>) {
         self.init(SIMD4<Float>(s.x, 0, 0, 0),

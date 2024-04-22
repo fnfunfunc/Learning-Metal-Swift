@@ -9,9 +9,9 @@ import Foundation
 import Metal
 import MetalKit
 
-
+fileprivate let MaxConstantsSize = 1_024 * 1_024
+fileprivate let MinBufferAlignment = 256
 fileprivate let MaxOutstandingFrameCount = 3
-fileprivate let MaxObjectCount = 16
 
 class Renderer: NSObject, MTKViewDelegate {
     
@@ -23,6 +23,8 @@ class Renderer: NSObject, MTKViewDelegate {
     var cowNode: Node!
     var nodes = [Node]()
     
+    var lights = [Light]()
+    
     private var renderPipelineState: MTLRenderPipelineState!
     private var depthStencilState: MTLDepthStencilState!
     private var samplerState: MTLSamplerState!
@@ -32,16 +34,16 @@ class Renderer: NSObject, MTKViewDelegate {
     private var time: TimeInterval = 0
     
     private var constantsBuffer: MTLBuffer!
-    private let constantsSize: Int
-    private let constantsStride: Int
+    private var currentConstantBufferOffset = 0
+    private var frameConstantsOffset = 0
+    private var lightConstantsOffset = 0
+    private var nodeConstantsOffsets = [Int]()
     
     init(device: MTLDevice, view: MTKView) {
         self.device = device
         self.commandQueue = device.makeCommandQueue()!
         self.view = view
         self.frameIndex = 0
-        self.constantsSize = MemoryLayout<NodeConstants>.size
-        self.constantsStride = align(constantsSize, upTo: 256)
         
         super.init()
         
@@ -51,7 +53,7 @@ class Renderer: NSObject, MTKViewDelegate {
         view.depthStencilPixelFormat = .depth32Float
         view.clearColor = MTLClearColor(red: 0.95, green: 0.95, blue: 0.95, alpha: 1.0)
         
-        loadAsset()
+        makeScene()
         makeResource()
         makePipeline()
     }
@@ -62,7 +64,10 @@ class Renderer: NSObject, MTKViewDelegate {
     
     func draw(in view: MTKView) {
         frameSemaphore.wait()
-        updateConstants()
+        
+        updateLightConstants()
+        updateFrameConstants()
+        updateNodeConstants()
         
         guard let renderPassDescriptor = view.currentRenderPassDescriptor else {
             return
@@ -78,12 +83,16 @@ class Renderer: NSObject, MTKViewDelegate {
         renderCommandEncoder?.setFrontFacing(.counterClockwise)
         renderCommandEncoder?.setCullMode(.back)
         
+        renderCommandEncoder?.setVertexBuffer(constantsBuffer, offset: frameConstantsOffset, index: 3)
+        renderCommandEncoder?.setFragmentBuffer(constantsBuffer, offset: frameConstantsOffset, index: 3)
+        renderCommandEncoder?.setFragmentBuffer(constantsBuffer, offset: lightConstantsOffset, index: 4)
+        
         for (objectIndex, node) in nodes.enumerated() {
             guard let mesh = node.mesh else {
                 continue
             }
             
-            renderCommandEncoder?.setVertexBuffer(constantsBuffer, offset: constantBufferOffset(objectIndex: objectIndex, frameIndex: frameIndex), index: 2)
+            renderCommandEncoder?.setVertexBuffer(constantsBuffer, offset: nodeConstantsOffsets[objectIndex], index: 2)
             for (i, meshBuffer) in mesh.vertexBuffers.enumerated() {
                 renderCommandEncoder?.setVertexBuffer(meshBuffer.buffer, offset: meshBuffer.offset, index: i)
             }
@@ -109,7 +118,7 @@ class Renderer: NSObject, MTKViewDelegate {
         frameIndex += 1
     }
     
-    private func loadAsset() {
+    private func makeScene() {
         let allocator = MTKMeshBufferAllocator(device: device)
         
         let mdlVertexDescriptor = MDLVertexDescriptor()
@@ -159,11 +168,21 @@ class Renderer: NSObject, MTKViewDelegate {
         }
         
         let mesh = try! MTKMesh(mesh: mdlMesh, device: device)
-
+        
         cowNode = Node(mesh: mesh)
         cowNode.texture = texture
         
         nodes = [cowNode]
+        
+        let ambientLight = Light()
+        ambientLight.type = .ambient
+        ambientLight.intensity = 0.1
+        
+        let sunLight = Light()
+        sunLight.type = .directional
+        sunLight.direction = normalize(SIMD3<Float>(repeating: -1))
+        
+        lights = [ambientLight, sunLight]
     }
     
     private func makePipeline() {
@@ -204,37 +223,74 @@ class Renderer: NSObject, MTKViewDelegate {
     }
     
     private func makeResource() {
-        constantsBuffer = device.makeBuffer(length: constantsStride * MaxObjectCount * MaxOutstandingFrameCount, options: .storageModeShared)
+        constantsBuffer = device.makeBuffer(length: MaxConstantsSize, options: .storageModeShared)
         constantsBuffer.label = "Dynamic Constant Buffer"
     }
     
-    private func updateConstants() {
-        time += (1.0 / Double(view.preferredFramesPerSecond))
-        let t = Float(time)
+    private func updateLightConstants() {
+        let layout = MemoryLayout<LightConstants>.self
         
-        let cameraPosition = SIMD3<Float>(0, 0, 2)
-        let viewMatrix = simd_float4x4(translate: -cameraPosition)
+        lightConstantsOffset = allocateConstantStorage(size: layout.stride * lights.count, alignment: layout.stride)
+        
+        let lightsBufferPointer = constantsBuffer.contents()
+            .advanced(by: lightConstantsOffset)
+            .assumingMemoryBound(to: LightConstants.self)
+        
+        for (lightIndex, light) in lights.enumerated() {
+            lightsBufferPointer[lightIndex] =
+            LightConstants(intensity: light.color * light.intensity, direction: light.direction, type: light.type.rawValue)
+            
+        }
+    }
+    
+    private func updateFrameConstants() {
+        time += (1.0 / Double(view.preferredFramesPerSecond))
         
         let aspectRatio = Float(view.drawableSize.width / view.drawableSize.height)
+        
         let projectionMatrix = simd_float4x4(perspectiveProjectionFoVY: .pi / 3, aspectRatio: aspectRatio, near: 0.01, far: 100)
+        
+        var constants = FrameConstants(projectionMatrix: projectionMatrix, lightCount: UInt32(lights.count))
+        
+        let layout = MemoryLayout<FrameConstants>.self
+        frameConstantsOffset = allocateConstantStorage(size: layout.size, alignment: layout.stride)
+        
+        let constantsPointer = constantsBuffer.contents().advanced(by: frameConstantsOffset)
+        constantsPointer.copyMemory(from: &constants, byteCount: layout.size)
+    }
+    
+    private func updateNodeConstants() {
+        let t = Float(time)
+        
+        let cameraPosition = SIMD3<Float>(0, 0.5, 2)
+        let viewMatrix = simd_float4x4(translate: -cameraPosition)
         
         let rotationAxis = normalize(SIMD3<Float>(0, 1, 0))
         let rotationMatrix = simd_float4x4(rotateAbout: rotationAxis, byAngle: t)
         
-        cowNode.transform = rotationMatrix * simd_float4x4(translate: SIMD3<Float>(0, -0.5, 0))
+        cowNode.transform = rotationMatrix
         
-        for (objectIndex, node) in nodes.enumerated() {
-            let transformMatrix = projectionMatrix * viewMatrix * node.worldTransform
-            var constants = NodeConstants(modelViewProjectionMatrix: transformMatrix)
-            let offset = constantBufferOffset(objectIndex: objectIndex, frameIndex: frameIndex)
+        nodeConstantsOffsets.removeAll()
+        for node in nodes {
+            let transform = viewMatrix * node.worldTransform
+            var constants = NodeConstants(modelViewProjectionMatrix: transform)
+            
+            let layout = MemoryLayout<NodeConstants>.self
+            let offset = allocateConstantStorage(size: layout.size, alignment: layout.stride)
             let constantsPointer = constantsBuffer.contents().advanced(by: offset)
-            constantsPointer.copyMemory(from: &constants, byteCount: constantsSize)
+            constantsPointer.copyMemory(from: &constants, byteCount: layout.size)
+            
+            nodeConstantsOffsets.append(offset)
         }
     }
     
-    private func constantBufferOffset(objectIndex: Int, frameIndex: Int) -> Int {
-        let frameConstantsOffset = (frameIndex % MaxOutstandingFrameCount) * MaxObjectCount * constantsStride
-        let objectConstantOffset = frameConstantsOffset + (objectIndex * constantsStride)
-        return objectConstantOffset
+    private func allocateConstantStorage(size: Int, alignment: Int) -> Int {
+        let effectiveAlignment = lcm(alignment, MinBufferAlignment)
+        var allocationOffset = align(currentConstantBufferOffset, upTo: effectiveAlignment)
+        if (allocationOffset + size >= MaxConstantsSize) {
+            allocationOffset = 0 // reset to zero
+        }
+        currentConstantBufferOffset = allocationOffset + size
+        return allocationOffset
     }
 }
