@@ -22,6 +22,9 @@
 		EC90C21F2BCE9A49003EA917 /* SimpleMesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC90C21E2BCE9A49003EA917 /* SimpleMesh.swift */; };
 		EC90C2212BCEC89D003EA917 /* MeshUtilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC90C2202BCEC89D003EA917 /* MeshUtilities.swift */; };
 		EC90C2232BCFF7FA003EA917 /* Node.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC90C2222BCFF7FA003EA917 /* Node.swift */; };
+		ECC4E5722BD5342A00D59495 /* spot_texture.png in Resources */ = {isa = PBXBuildFile; fileRef = ECC4E56C2BD5342A00D59495 /* spot_texture.png */; };
+		ECC4E5762BD5342A00D59495 /* spot_triangulated.obj in Resources */ = {isa = PBXBuildFile; fileRef = ECC4E5702BD5342A00D59495 /* spot_triangulated.obj */; };
+		ECC4E5792BD601A300D59495 /* spot_material.mtl in Resources */ = {isa = PBXBuildFile; fileRef = ECC4E5782BD601A300D59495 /* spot_material.mtl */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -43,6 +46,9 @@
 		EC90C21E2BCE9A49003EA917 /* SimpleMesh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleMesh.swift; sourceTree = "<group>"; };
 		EC90C2202BCEC89D003EA917 /* MeshUtilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshUtilities.swift; sourceTree = "<group>"; };
 		EC90C2222BCFF7FA003EA917 /* Node.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Node.swift; sourceTree = "<group>"; };
+		ECC4E56C2BD5342A00D59495 /* spot_texture.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = spot_texture.png; sourceTree = "<group>"; };
+		ECC4E5702BD5342A00D59495 /* spot_triangulated.obj */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = spot_triangulated.obj; sourceTree = "<group>"; };
+		ECC4E5782BD601A300D59495 /* spot_material.mtl */ = {isa = PBXFileReference; lastKnownFileType = text; path = spot_material.mtl; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -92,6 +98,7 @@
 				EC90C2052BCCCCC9003EA917 /* Assets.xcassets */,
 				EC90C2072BCCCCC9003EA917 /* LaunchScreen.storyboard */,
 				EC90C20A2BCCCCC9003EA917 /* Info.plist */,
+				ECC4E56A2BD533CD00D59495 /* Resources */,
 			);
 			path = LearningMetalSwift;
 			sourceTree = "<group>";
@@ -112,6 +119,24 @@
 				EC90C2172BCCD3C9003EA917 /* Shader.metal */,
 			);
 			path = MetalLibs;
+			sourceTree = "<group>";
+		};
+		ECC4E56A2BD533CD00D59495 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				ECC4E56B2BD5342A00D59495 /* spot */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		ECC4E56B2BD5342A00D59495 /* spot */ = {
+			isa = PBXGroup;
+			children = (
+				ECC4E56C2BD5342A00D59495 /* spot_texture.png */,
+				ECC4E5702BD5342A00D59495 /* spot_triangulated.obj */,
+				ECC4E5782BD601A300D59495 /* spot_material.mtl */,
+			);
+			path = spot;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -173,8 +198,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				EC90C2092BCCCCC9003EA917 /* LaunchScreen.storyboard in Resources */,
+				ECC4E5722BD5342A00D59495 /* spot_texture.png in Resources */,
+				ECC4E5792BD601A300D59495 /* spot_material.mtl in Resources */,
 				EC90C2062BCCCCC9003EA917 /* Assets.xcassets in Resources */,
 				EC90C2042BCCCCC7003EA917 /* Main.storyboard in Resources */,
+				ECC4E5762BD5342A00D59495 /* spot_triangulated.obj in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

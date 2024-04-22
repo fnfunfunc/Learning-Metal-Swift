@@ -20,8 +20,7 @@ class Renderer: NSObject, MTKViewDelegate {
     let view: MTKView
     
     var vertexDescriptor: MTLVertexDescriptor!
-    var boxNode: Node!
-    var sphereNode: Node!
+    var cowNode: Node!
     var nodes = [Node]()
     
     private var renderPipelineState: MTLRenderPipelineState!
@@ -52,6 +51,7 @@ class Renderer: NSObject, MTKViewDelegate {
         view.depthStencilPixelFormat = .depth32Float
         view.clearColor = MTLClearColor(red: 0.95, green: 0.95, blue: 0.95, alpha: 1.0)
         
+        loadAsset()
         makeResource()
         makePipeline()
     }
@@ -109,6 +109,63 @@ class Renderer: NSObject, MTKViewDelegate {
         frameIndex += 1
     }
     
+    private func loadAsset() {
+        let allocator = MTKMeshBufferAllocator(device: device)
+        
+        let mdlVertexDescriptor = MDLVertexDescriptor()
+        let positionAttribute = mdlVertexDescriptor.vertexAttributes[0]
+        let normalAttribute = mdlVertexDescriptor.vertexAttributes[1]
+        let textureCoordAttribute = mdlVertexDescriptor.vertexAttributes[2]
+        positionAttribute.name = MDLVertexAttributePosition
+        positionAttribute.format = .float3
+        positionAttribute.offset = 0
+        positionAttribute.bufferIndex = 0
+        normalAttribute.name = MDLVertexAttributeNormal
+        normalAttribute.format = .float3
+        normalAttribute.offset = MemoryLayout<SIMD3<Float>>.stride
+        normalAttribute.bufferIndex = 0
+        textureCoordAttribute.name = MDLVertexAttributeTextureCoordinate
+        textureCoordAttribute.format = .float2
+        textureCoordAttribute.offset = 2 * MemoryLayout<SIMD3<Float>>.stride
+        textureCoordAttribute.bufferIndex = 0
+        mdlVertexDescriptor.bufferLayouts[0].stride = 2 * MemoryLayout<SIMD3<Float>>.stride + MemoryLayout<SIMD2<Float>>.stride
+        
+        vertexDescriptor = MTKMetalVertexDescriptorFromModelIO(mdlVertexDescriptor)
+        
+        let assetURL = Bundle.main.url(forResource: "spot_triangulated", withExtension: "obj")
+        let mdlAsset = MDLAsset(url: assetURL, vertexDescriptor: mdlVertexDescriptor, bufferAllocator: allocator)
+        
+        mdlAsset.loadTextures()
+        
+        let meshes = mdlAsset.childObjects(of: MDLMesh.self) as? [MDLMesh]
+        guard let mdlMesh = meshes?.first else {
+            fatalError("Did not find any meshes in the Model I/O asset")
+        }
+        
+        let textureLoader = MTKTextureLoader(device: device)
+        let options: [MTKTextureLoader.Option : Any] = [
+            .textureUsage : MTLTextureUsage.shaderRead.rawValue,
+            .textureStorageMode : MTLStorageMode.private.rawValue,
+            .origin : MTKTextureLoader.Origin.bottomLeft.rawValue
+        ]
+        
+        var texture : MTLTexture?
+        let firstSubmesh = mdlMesh.submeshes?.firstObject as? MDLSubmesh
+        let material = firstSubmesh?.material
+        if let baseColorProperty = material?.property(with: MDLMaterialSemantic.baseColor) {
+            if baseColorProperty.type == .texture, let textureURL = baseColorProperty.urlValue {
+                texture = try? textureLoader.newTexture(URL: textureURL, options: options)
+            }
+        }
+        
+        let mesh = try! MTKMesh(mesh: mdlMesh, device: device)
+
+        cowNode = Node(mesh: mesh)
+        cowNode.texture = texture
+        
+        nodes = [cowNode]
+    }
+    
     private func makePipeline() {
         guard let library = device.makeDefaultLibrary() else {
             fatalError("Unable to create default Metal library")
@@ -147,56 +204,6 @@ class Renderer: NSObject, MTKViewDelegate {
     }
     
     private func makeResource() {
-        let textureLoader = MTKTextureLoader(device: device)
-        let options: [MTKTextureLoader.Option : Any] = [
-            .textureUsage : MTLTextureUsage.shaderRead.rawValue,
-            .textureStorageMode : MTLStorageMode.private.rawValue
-        ]
-        let texture = try? textureLoader.newTexture(name: "uv_grid", scaleFactor: 1.0, bundle: nil, options: options)
-        
-        let allocator = MTKMeshBufferAllocator(device: device)
-        
-        let mdlVertexDescriptor = MDLVertexDescriptor()
-        let positionAttribute = mdlVertexDescriptor.vertexAttributes[0]
-        let normalAttribute = mdlVertexDescriptor.vertexAttributes[1]
-        let textureCoordAttribute = mdlVertexDescriptor.vertexAttributes[2]
-        // position attribute
-        positionAttribute.name = MDLVertexAttributePosition
-        positionAttribute.format = .float3
-        positionAttribute.offset = 0
-        positionAttribute.bufferIndex = 0
-        // normal attribute
-        normalAttribute.name = MDLVertexAttributeNormal
-        normalAttribute.format = .float3
-        normalAttribute.offset = MemoryLayout<SIMD3<Float>>.stride
-        normalAttribute.bufferIndex = 0
-        // texture attribute
-        textureCoordAttribute.name = MDLVertexAttributeTextureCoordinate
-        textureCoordAttribute.format = .float2
-        textureCoordAttribute.offset = 2 * MemoryLayout<SIMD3<Float>>.stride
-        textureCoordAttribute.bufferIndex = 0
-        
-        mdlVertexDescriptor.bufferLayouts[0].stride = MemoryLayout<SIMD3<Float>>.stride * 2 + MemoryLayout<SIMD2<Float>>.stride
-        
-        let mdlBox = MDLMesh(boxWithExtent: SIMD3<Float>(repeating: 1.4), segments: SIMD3<UInt32>(repeating: 1), inwardNormals: false, geometryType: .triangles, allocator: allocator)
-        mdlBox.vertexDescriptor = mdlVertexDescriptor
-        
-        let boxMesh = try! MTKMesh(mesh: mdlBox, device: device)
-         
-        let mdlSphere = MDLMesh(sphereWithExtent: SIMD3<Float>(repeating: 1), segments: SIMD2<UInt32>(repeating: 24), inwardNormals: true, geometryType: .triangles, allocator: allocator)
-        mdlSphere.vertexDescriptor = mdlVertexDescriptor
-        
-        let sphereMesh = try! MTKMesh(mesh: mdlSphere, device: device)
-        
-        boxNode = Node(mesh: boxMesh)
-        boxNode.texture = texture
-        sphereNode = Node(mesh: sphereMesh)
-        sphereNode.texture = texture
-        
-        nodes = [boxNode, sphereNode]
-        
-        vertexDescriptor = MTKMetalVertexDescriptorFromModelIO(mdlVertexDescriptor)!
-        
         constantsBuffer = device.makeBuffer(length: constantsStride * MaxObjectCount * MaxOutstandingFrameCount, options: .storageModeShared)
         constantsBuffer.label = "Dynamic Constant Buffer"
     }
@@ -205,17 +212,16 @@ class Renderer: NSObject, MTKViewDelegate {
         time += (1.0 / Double(view.preferredFramesPerSecond))
         let t = Float(time)
         
-        let cameraPosition = SIMD3<Float>(0, 0, 5)
+        let cameraPosition = SIMD3<Float>(0, 0, 2)
         let viewMatrix = simd_float4x4(translate: -cameraPosition)
         
         let aspectRatio = Float(view.drawableSize.width / view.drawableSize.height)
         let projectionMatrix = simd_float4x4(perspectiveProjectionFoVY: .pi / 3, aspectRatio: aspectRatio, near: 0.01, far: 100)
         
-        let rotationAxis = normalize(SIMD3<Float>(0.3, 0.7, 0.1))
+        let rotationAxis = normalize(SIMD3<Float>(0, 1, 0))
         let rotationMatrix = simd_float4x4(rotateAbout: rotationAxis, byAngle: t)
         
-        boxNode.transform = simd_float4x4(translate: SIMD3<Float>(0, -1.5, 0)) * rotationMatrix
-        sphereNode.transform = simd_float4x4(translate: SIMD3<Float>(0, 1.5, 0)) * rotationMatrix
+        cowNode.transform = rotationMatrix * simd_float4x4(translate: SIMD3<Float>(0, -0.5, 0))
         
         for (objectIndex, node) in nodes.enumerated() {
             let transformMatrix = projectionMatrix * viewMatrix * node.worldTransform
